@@ -1,33 +1,97 @@
 <script lang="ts">
   import {
-    Label,
-    Input,
-    Textarea,
-    Button,
-    Select,
+    getUserState,
+    type UpdatableMedia,
+  } from "$lib/state/user-state.svelte";
+  import {
     Avatar,
+    Button,
+    Helper,
+    Input,
+    Label,
+    Select,
+    Textarea,
   } from "flowbite-svelte";
-  import { getUserState } from "$lib/state/user-state.svelte";
-  import DropZone from "svelte-file-dropzone";
+  import { createForm } from "svelte-forms-lib";
   import { generateImageThumbnail } from "$lib/utils/CustomUtility";
-  let { closeModal } = $props();
-  let userContext = getUserState();
-  const { mediaTypes, folders } = $derived(userContext);
+  import DropZone from "svelte-file-dropzone";
 
-  let file = $state<File | null>(null);
-  let thumbnail = $state<File | null>();
-  let mediaName = $state<string>("");
-  let description = $state<string>("");
-  let mediaTypeId = $state<number>();
-  let folderId = $state<number>();
+  let userContext = getUserState();
+  const { mediaTypes, folders, user } = $derived(userContext);
+  let { closeModal, itemToEdit } = $props();
+  $inspect(itemToEdit);
+  let isEditMode = $derived(!!itemToEdit);
+  let fileToUpload = $state<File | null>(null);
+  let thumbnailToUpload = $state<File | null>(null);
   let errorMessage = $state<string>("");
 
-  const folderPath = $derived.by(
-    () => folders?.find((folder) => folder.id == folderId)?.folder_path,
-  );
+  type FormData = {
+    mediaName: string;
+    description: string;
+    mediaTypeId: number | null;
+    parentFolderId: number | null;
+    thumbnailUrl?: string;
+  };
+
+  type SelectOption = {
+    value: number;
+    name: string;
+  };
+
+  const getInitialValues = (): FormData => {
+    if (isEditMode && itemToEdit) {
+      return {
+        mediaName: itemToEdit.display_name,
+        description: itemToEdit.description,
+        mediaTypeId:
+          folders?.find((folder) => folder.id === itemToEdit.folder_id)
+            ?.media_type_id || null,
+        parentFolderId: itemToEdit.folder_id,
+        thumbnailUrl: itemToEdit.thumbnail,
+      };
+    }
+    return {
+      mediaName: "",
+      description: "",
+      mediaTypeId: null,
+      parentFolderId: null,
+    };
+  };
+
+  const { handleSubmit, errors, form, validateField } = createForm<FormData>({
+    initialValues: getInitialValues(),
+    validate: (values) => {
+      const errors: Partial<Record<keyof FormData, string>> = {};
+      if (!values.mediaName) {
+        errors.mediaName = "Folder name is required";
+      }
+
+      if (!values.mediaTypeId) {
+        errors.mediaTypeId = "Media type is required";
+      }
+
+      if (!values.parentFolderId) {
+        errors.parentFolderId = "Parent folder is required";
+      }
+
+      return errors;
+    },
+    onSubmit: async (values) => {
+      try {
+        if (isEditMode) {
+          await handleEditMediaSave(values);
+        } else {
+          await handleNewMediaSave(values);
+        }
+      } catch (error) {
+        errorMessage = "An error occurred while saving the media.";
+        console.error(error);
+      }
+    },
+  });
 
   const mediaTypeOptions = $derived.by(() => {
-    let mediaTypeOptions: { value: number; name: string }[] = [];
+    let mediaTypeOptions: SelectOption[] = [];
     if (mediaTypes) {
       mediaTypes.forEach((type) => {
         mediaTypeOptions.push({ value: type.id, name: type.name });
@@ -37,44 +101,80 @@
   });
 
   const folderOptions = $derived.by(() => {
-    let folderOptions: { value: number; name: string }[] = [];
+    let folderOptions: SelectOption[] = [];
     if (folders) {
       folders.filter((folder) => {
-        if (folder.media_type_id == mediaTypeId) {
+        folder.media_type_id === $form.mediaTypeId &&
           folderOptions.push({
             value: folder.id,
             name: folder.folder_path ? folder.folder_path : "",
           });
-        }
       });
     }
     return folderOptions;
   });
 
+  function handleBlur(field: keyof FormData) {
+    validateField(field);
+  }
+
   const handleFileDrop = async (event: CustomEvent<any>) => {
     const { acceptedFiles } = event.detail;
     if (acceptedFiles.length) {
-      file = acceptedFiles[0] as File;
-      thumbnail = await generateImageThumbnail(file);
+      fileToUpload = acceptedFiles[0] as File;
+      thumbnailToUpload = await generateImageThumbnail(fileToUpload);
     }
   };
 
-  const handleNewMediaSave = async () => {
+  function handleSelectOptionChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const value = parseInt(select.value);
+    const fieldName = select.name as keyof FormData;
+
+    if (select.name === "parentFolderId") {
+      $form.parentFolderId = value === 0 ? null : value;
+    } else if (fieldName === "mediaTypeId") {
+      $form.mediaTypeId = value === 0 ? null : value;
+    }
+
+    validateField(fieldName);
+  }
+
+  const folderPath = $derived.by(
+    () =>
+      folders?.find((folder) => folder.id == $form.parentFolderId)?.folder_path,
+  );
+
+  const getFolderPath = (parentFolderId: number) =>
+    folders?.find((folder) => folder.id == parentFolderId)?.folder_path;
+
+  const getMediaUrl = (parentFolderId: number, mediaFileName: string) => {
+    const fileFolderPath = getFolderPath(parentFolderId);
+    if (fileFolderPath) {
+      const response = userContext.getMediaPublicUrl(
+        `${user?.id}/${fileFolderPath}/${mediaFileName}`,
+      );
+      return response?.data.publicUrl || "";
+    }
+    return "";
+  };
+
+  const handleNewMediaSave = async (values: typeof $form) => {
     if (
-      file &&
-      thumbnail &&
-      mediaTypeId &&
-      folderId &&
-      mediaName &&
+      fileToUpload &&
+      thumbnailToUpload &&
+      values.mediaTypeId &&
+      values.parentFolderId &&
+      values.mediaName &&
       folderPath
     ) {
       const res = await userContext.saveNewMedia(
-        file,
-        mediaName,
-        description,
-        thumbnail,
-        folderId,
-        folderPath,
+        fileToUpload,
+        values.mediaName,
+        values.description,
+        thumbnailToUpload,
+        values.parentFolderId,
+        folderPath ?? null,
       );
 
       if (res && res.error) {
@@ -82,90 +182,172 @@
       } else if (res && res.status === 201) {
         closeModal();
       }
+    } else {
+      if (!fileToUpload || !thumbnailToUpload) {
+        errorMessage = "Please upload a media file.";
+      } else {
+        errorMessage = "Please fill in all required fields.";
+      }
+    }
+  };
+
+  const handleEditMediaSave = async (values: typeof $form) => {
+    try {
+      const media: UpdatableMedia = {
+        description: values.description,
+        display_name: values.mediaName,
+        name: values.mediaName,
+        folder_id: values.parentFolderId || 0,
+        thumbnail: values.thumbnailUrl || null,
+      };
+
+      const res = await userContext.updateMedia(
+        itemToEdit.id,
+        media,
+        fileToUpload,
+        thumbnailToUpload,
+        folderPath ?? null,
+      );
+
+      if (res && res.error) {
+        errorMessage = "An error occurred while updating the media.";
+      } else if (res && (res.status === 200 || res.status === 204)) {
+        closeModal();
+      }
+    } catch (error) {
+      errorMessage = "An error occurred while updating the media.";
+      console.error(error);
     }
   };
 </script>
 
-<form>
-  <div class="grid grid-cols-6 gap-6">
+<form onsubmit={handleSubmit}>
+  <div class="grid grid-cols-6 gap-6 mb-5">
     <Label class="col-span-6 space-y-2">
-      <span>Media Name</span>
+      <span>Media name</span>
       <Input
-        name="media_name"
+        id="mediaName"
+        name="mediaName"
         class="border outline-none"
-        placeholder="Provide a name for the media"
-        bind:value={mediaName}
-        required
+        bind:value={$form.mediaName}
+        on:blur={() => handleBlur("mediaName")}
+        color={$errors.mediaName ? "red" : "base"}
       />
+      {#if $errors.mediaName}
+        <Helper class="mt-2" color="red">
+          <span class="font-medium">{$errors.mediaName}</span>
+        </Helper>
+      {/if}
     </Label>
     <Label class="col-span-6 space-y-2">
       <span>Description</span>
       <Textarea
         id="description"
+        name="description"
         rows={4}
         class="bg-gray-50 outline-none dark:bg-gray-700"
         placeholder="Provide a description about the media"
-        bind:value={description}
+        bind:value={$form.description}
       ></Textarea>
     </Label>
-    <DropZone
-      on:drop={handleFileDrop}
-      multiple={false}
-      maxSize={10 * 1024 * 1024}
-      containerClasses="col-span-6 space-y-2 sm:col-span-4"
-    >
-      <div class="text-center">
-        <svg
-          class="mx-auto size-12 text-gray-300"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden="true"
-          data-slot="icon"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z"
-            clip-rule="evenodd"
-          />
-        </svg>
-        <div class="mt-4 flex text-sm/6 text-gray-600">
-          <label
-            for="file-upload"
-            class="relative cursor-pointer rounded-md bg-white font-semibold text-indigo-600 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2 focus-within:outline-hidden hover:text-indigo-500"
+    {#if !isEditMode || (isEditMode && !fileToUpload)}
+      <DropZone
+        on:drop={handleFileDrop}
+        multiple={false}
+        maxSize={10 * 1024 * 1024}
+        containerClasses="col-span-6 space-y-2 sm:col-span-4"
+      >
+        <div class="text-center">
+          <svg
+            class="mx-auto size-12 text-gray-300"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+            data-slot="icon"
           >
-            <span>{`${file ? "different" : "Upload a file"} `}</span>
-          </label>
-          <p class="pl-1">or drag and drop</p>
+            <path
+              fill-rule="evenodd"
+              d="M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <div class="mt-4 flex text-sm/6 text-gray-600">
+            <label
+              for="file-upload"
+              class="relative cursor-pointer rounded-md bg-white font-semibold text-indigo-600 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2 focus-within:outline-hidden hover:text-indigo-500"
+            >
+              <span>{`${fileToUpload ? "different" : "Upload a file"} `}</span>
+            </label>
+            <p class="pl-1">or drag and drop</p>
+          </div>
+          <p class="text-xs/5 text-gray-600">PNG, JPG, GIF up to 10MB</p>
         </div>
-        <p class="text-xs/5 text-gray-600">PNG, JPG, GIF up to 10MB</p>
+      </DropZone>
+    {:else}
+      <div class="col-span-6 space-y-2 sm:col-span-4">
+        <p class="text-sm text-gray-600">Current file: {fileToUpload?.name}</p>
+        <Button
+          type="button"
+          size="sm"
+          color="light"
+          on:click={() => (fileToUpload = null)}
+        >
+          Change File
+        </Button>
       </div>
-    </DropZone>
+    {/if}
     <div
       class="border-gray-200 border-2 border-dashed col-span-6 space-y-2 sm:col-span-2 flex flex-col items-center justify-center"
     >
       <div class="flex flex-col items-center text-center justify-center w-full">
         <Avatar
           class="mb-4 h-15 w-15 rounded-lg mt-1 sm:mb-0 xl:mb-4 2xl:mb-0"
-          src={thumbnail ? URL.createObjectURL(thumbnail) : ""}
+          src={thumbnailToUpload
+            ? URL.createObjectURL(thumbnailToUpload)
+            : isEditMode && $form.thumbnailUrl
+              ? $form.thumbnailUrl
+              : ""}
+          alt={$form.mediaName}
         />
       </div>
-      <span class=" font-normal text-center">Thumbnail</span>
+      <span class=" font-normal text-center">{$form.mediaName}</span>
     </div>
+
     <Label class="col-span-6 space-y-2">
-      <span>Select Media Type</span>
+      <span>Select media type</span>
       <Select
+        id="mediaTypeId"
+        name="mediaTypeId"
         items={mediaTypeOptions}
-        class="font-normal"
-        bind:value={mediaTypeId}
+        class={$errors.mediaTypeId ? "select-error" : "font-normal"}
+        value={$form.mediaTypeId ?? 0}
+        on:blur={() => handleBlur("mediaTypeId")}
+        on:change={handleSelectOptionChange}
+        color={$errors.mediaTypeId ? "red" : "base"}
       ></Select>
+      {#if $errors.mediaTypeId}
+        <Helper class="mt-2" color="red">
+          <span class="font-medium">{$errors.mediaTypeId}</span>
+        </Helper>
+      {/if}
     </Label>
+
     <Label class="col-span-6 space-y-2">
-      <span>Select Folder</span>
-      <Select items={folderOptions} class="font-normal" bind:value={folderId}
+      <span>Select parent folder</span>
+      <Select
+        id="parentFolderId"
+        name="parentFolderId"
+        items={folderOptions}
+        class="font-normal"
+        on:blur={() => handleBlur("parentFolderId")}
+        bind:value={$form.parentFolderId}
       ></Select>
+      {#if $errors.parentFolderId}
+        <Helper class="mt-2" color="red">
+          <span class="font-medium">{$errors.parentFolderId}</span>
+        </Helper>
+      {/if}
     </Label>
   </div>
+  <Button type="submit">{isEditMode ? "Update" : "Save"} Media</Button>
 </form>
-<div>
-  <Button type="button" onclick={handleNewMediaSave}>Save Media</Button>
-</div>

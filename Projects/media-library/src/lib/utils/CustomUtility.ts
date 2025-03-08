@@ -1,5 +1,4 @@
 import type { Folder } from "$lib/state/user-state.svelte";
-import { thumbHashToDataURL, rgbaToThumbHash } from "thumbhash";
 
 export function generateFolderPaths(folders: Folder[]) {
   const folderMap = new Map();
@@ -46,36 +45,47 @@ export async function generateImageThumbnail(file: File): Promise<File | null> {
         // Calculate new dimensions while maintaining aspect ratio
         if (width > maxWidth || height > maxHeight) {
           const aspectRatio = width / height;
-          if (width > height) {
+          if (aspectRatio > 1) {
+            // Landscape image
             width = maxWidth;
             height = Math.round(maxWidth / aspectRatio);
           } else {
+            // Portrait or square image
             height = maxHeight;
             width = Math.round(maxHeight * aspectRatio);
           }
         }
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
 
+        // Create canvas and draw the resized image
+        const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
+        const ctx = canvas.getContext("2d");
 
         if (!ctx) {
           reject(new Error("Failed to get canvas context"));
           return;
         }
 
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const hash = rgbaToThumbHash(
-          imageData.width,
-          imageData.height,
-          imageData.data,
-        );
-        const thumbnailDataURL = thumbHashToDataURL(hash);
-        dataURLToFile(thumbnailDataURL, `${new Date().getTime()}_thumbnail.png`)
-          .then((thumbnail) => resolve(thumbnail))
-          .catch(reject);
+        // Draw the image on the canvas with the new dimensions
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert canvas to blob and then to File
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("Failed to create image blob"));
+            return;
+          }
+
+          // Create a new file with timestamp to ensure uniqueness
+          const thumbnail = new File(
+            [blob],
+            `${new Date().getTime()}_thumbnail.png`,
+            { type: "image/png" },
+          );
+
+          resolve(thumbnail);
+        }, "image/png");
       };
 
       img.onerror = () => reject(new Error("Failed to load image"));
@@ -84,10 +94,4 @@ export async function generateImageThumbnail(file: File): Promise<File | null> {
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
-}
-
-async function dataURLToFile(dataURL: string, filename: string): Promise<File> {
-  const response = await fetch(dataURL);
-  const blob = await response.blob();
-  return new File([blob], filename, { type: blob.type });
 }

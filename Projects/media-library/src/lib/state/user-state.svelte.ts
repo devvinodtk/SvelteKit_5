@@ -35,7 +35,7 @@ export type Folder = {
   folder_path: string | null;
 };
 
-type Media = {
+export type Media = {
   created_at: string;
   description: string | null;
   display_name: string;
@@ -46,7 +46,7 @@ type Media = {
   user_id: string;
 };
 
-type UpdatableMedia = Omit<Media, "id" | "user_id" | "created_at">;
+export type UpdatableMedia = Omit<Media, "id" | "user_id" | "created_at">;
 
 type UpdatableFolder = Omit<
   Folder,
@@ -80,28 +80,24 @@ export class UserState {
     }
     const userId = this.user.id;
 
-    const [
-      userResponse,
-      mediaResponse,
-      tagsResponse,
-      mediaTypeResponse,
-      foldersResponse,
-    ] = await Promise.all([
-      this.supabase
-        .from("user_names")
-        .select("name")
-        .eq("user_id", userId)
-        .single(),
-      this.supabase.from("media").select("*").eq("user_id", userId),
-      this.supabase.from("tags").select("*").eq("user_id", this.user.id),
-      this.supabase.from("media_types").select("*").eq("user_id", this.user.id),
-      this.supabase.rpc("folders_media_types_mapping"),
-    ]);
+    const [userResponse, mediaResponse, mediaTypeResponse, foldersResponse] =
+      await Promise.all([
+        this.supabase
+          .from("user_names")
+          .select("name")
+          .eq("user_id", userId)
+          .single(),
+        this.supabase.from("media").select("*").eq("user_id", userId),
+        this.supabase
+          .from("media_types")
+          .select("*")
+          .eq("user_id", this.user.id),
+        this.supabase.rpc("folders_media_types_mapping"),
+      ]);
 
     if (
       userResponse.error ||
       mediaResponse.error ||
-      tagsResponse.error ||
       mediaTypeResponse.error ||
       foldersResponse.error
     ) {
@@ -109,7 +105,6 @@ export class UserState {
       console.error({
         userError: userResponse.error,
         mediaError: mediaResponse.error,
-        tagsError: tagsResponse.error,
         mediaTypeError: mediaTypeResponse.error,
         foldersError: foldersResponse.error,
       });
@@ -118,28 +113,26 @@ export class UserState {
 
     this.userName = userResponse.data?.name;
     this.media = mediaResponse.data;
-    this.tags = tagsResponse.data;
     this.mediaTypes = mediaTypeResponse.data;
     if (foldersResponse.data && foldersResponse.data.length) {
       this.folders = generateFolderPaths(foldersResponse.data);
     }
   }
 
-  async saveNewMedia(
-    mediaFile: File,
+  async uploadMediaAndReturnThumbNailUrl(
     mediaName: string,
-    description: string,
-    thumbNail: File,
-    folderId: number,
+    mediaFile: File,
     folderPath: string,
+    thumbNail: File,
   ) {
     if (!this.supabase || !this.user) {
       return;
     }
-    const fileName = `${new Date().getTime()}_${mediaFile.name.split(".").pop()}`;
-    let filePath = encodeURIComponent(
-      `${this.user.id}/${folderPath}/${fileName}`,
+
+    const encodedFileName = encodeURIComponent(
+      `${new Date().getTime()}_${mediaName}.${mediaFile.name.split(".").pop()}`,
     );
+    let filePath = `${this.user.id}/${folderPath}/${encodedFileName}`;
     let thumbNailPath = `${this.user.id}/thumbNails/${folderPath}/${thumbNail.name}`;
     let [mediaResponse, thumbNailResponse] = await Promise.all([
       this.supabase.storage.from("media-lib").upload(filePath, mediaFile),
@@ -154,20 +147,43 @@ export class UserState {
       });
       return { status: 400, error: "Error uploading media" };
     }
-
-    // const fileUrl = this.supabase.storage
-    //   .from("media-lib")
-    //   .getPublicUrl(filePath);
-
-    const thumbNailUrl = this.supabase.storage
+    const thumbnailUrl = await this.supabase.storage
       .from("media-lib")
       .getPublicUrl(thumbNailPath);
 
+    return { thumbnailUrl, encodedFileName };
+  }
+
+  async saveNewMedia(
+    mediaFile: File,
+    mediaName: string,
+    description: string,
+    thumbNail: File,
+    folderId: number,
+    folderPath: string,
+  ) {
+    if (!this.supabase || !this.user) {
+      return;
+    }
+    const uploadResult = await this.uploadMediaAndReturnThumbNailUrl(
+      mediaName,
+      mediaFile,
+      folderPath,
+      thumbNail,
+    );
+
+    if (!uploadResult || uploadResult.status === 400) {
+      console.error(uploadResult?.error || "Unknown error uploading media");
+      return;
+    }
+
+    const { thumbnailUrl, encodedFileName } = uploadResult;
+
     const response = await this.insertNewMedia({
-      name: fileName,
+      name: encodedFileName,
       display_name: mediaName,
       description,
-      thumbnail: thumbNailUrl.data.publicUrl,
+      thumbnail: thumbnailUrl?.data.publicUrl || "",
       folder_id: folderId,
     });
 
@@ -186,6 +202,46 @@ export class UserState {
     return { status, error };
   }
 
+  async updateMedia(
+    mediaId: number,
+    updateObject: Partial<UpdatableMedia>,
+    mediaFile: File | null,
+    thumbnailFile: File | null,
+    folderPath: string | null,
+  ) {
+    if (!this.supabase || !this.user) {
+      return;
+    }
+
+    if (mediaFile && thumbnailFile && updateObject.display_name && folderPath) {
+      const uploadResult = await this.uploadMediaAndReturnThumbNailUrl(
+        updateObject.display_name,
+        mediaFile,
+        folderPath,
+        thumbnailFile,
+      );
+
+      if (!uploadResult || uploadResult.status === 400) {
+        console.error(uploadResult?.error || "Unknown error uploading media");
+        return;
+      }
+
+      const { thumbnailUrl, encodedFileName } = uploadResult;
+
+      if (thumbnailUrl && encodedFileName) {
+        updateObject.thumbnail = thumbnailUrl.data.publicUrl;
+        updateObject.name = encodedFileName;
+      }
+    }
+
+    const { status, error } = await this.supabase
+      .from("media")
+      .update(updateObject)
+      .eq("id", mediaId);
+
+    return { status, error };
+  }
+
   async insertNewFolder(insertObject: Partial<UpdatableFolder>) {
     if (!this.supabase || !this.user) {
       return;
@@ -199,9 +255,30 @@ export class UserState {
     return { status, error };
   }
 
+  async updateFolder(folderId: number, updateObject: Partial<UpdatableFolder>) {
+    if (!this.supabase || !this.user) {
+      return;
+    }
+
+    const { status, error } = await this.supabase
+      .from("folders")
+      .update(updateObject)
+      .eq("id", folderId);
+
+    return { status, error };
+  }
+
   async logout() {
     await this.supabase?.auth.signOut();
     goto("/login");
+  }
+
+  getMediaPublicUrl(filePath: string) {
+    if (!this.supabase || !this.user) {
+      return;
+    }
+
+    return this.supabase.storage.from("media-lib").getPublicUrl(filePath);
   }
 }
 

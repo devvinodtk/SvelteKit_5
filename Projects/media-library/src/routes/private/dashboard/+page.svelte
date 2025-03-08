@@ -10,17 +10,35 @@
 
   import { Button, Avatar, Heading, Toolbar, Badge } from "flowbite-svelte";
   import { PlusOutline } from "flowbite-svelte-icons";
-  import { getUserState } from "$lib/state/user-state.svelte";
+  import {
+    getUserState,
+    type Folder,
+    type Media,
+  } from "$lib/state/user-state.svelte";
   import { Modal } from "$components";
   let userContext = getUserState();
   let openModal = $state(false);
   let modalHeading = $state<string>("");
   let currentForm = $state<"manage-media" | "manage-folder">("manage-media");
-  let { media, folders } = $derived(userContext);
+  let itemToEdit = $state<Folder | Media>();
+  let { media, folders, user } = $derived(userContext);
 
-  function handleAddUser() {
-    openModal = true;
-  }
+  const folderPath = (parentFolderId: number) =>
+    folders?.find((folder) => folder.id == parentFolderId)?.folder_path;
+
+  const getMediaUrl = (parentFolderId: number, mediaFileName: string) => {
+    const fileFolderPath = folderPath(parentFolderId);
+    if (fileFolderPath) {
+      const response = userContext.getMediaPublicUrl(
+        `${user?.id}/${fileFolderPath}/${mediaFileName}`,
+      );
+      if (response?.data.publicUrl) {
+        console.log(decodeURI(response?.data.publicUrl));
+        return response?.data.publicUrl;
+      }
+    }
+    return "";
+  };
 </script>
 
 <main class="relative h-full w-full overflow-y-aut dark:bg-gray-800 p-4">
@@ -40,6 +58,7 @@
             openModal = true;
             modalHeading = "Add Media";
             currentForm = "manage-media";
+            itemToEdit = undefined;
           }}
         >
           <PlusOutline size="sm" />Add Media
@@ -52,15 +71,15 @@
       <TableHeadCell></TableHeadCell>
       <TableHeadCell>Name</TableHeadCell>
       <TableHeadCell>Media Type</TableHeadCell>
+      <TableHeadCell>Folder Path</TableHeadCell>
       <TableHeadCell>Description</TableHeadCell>
-      <TableHeadCell>Tags</TableHeadCell>
       <TableHeadCell>
         <span class="sr-only">Edit</span>
       </TableHeadCell>
     </TableHead>
     {#if media}
       <TableBody tableBodyClass="divide-y">
-        {#each media as item}
+        {#each media.sort( (a, z) => a.display_name.localeCompare(z.display_name), ) as item (item)}
           <TableBodyRow>
             <TableBodyCell>
               {#if item.thumbnail}
@@ -69,14 +88,15 @@
             </TableBodyCell>
             <TableBodyCell>{item.display_name}</TableBodyCell>
             <TableBodyCell>Image</TableBodyCell>
+            <TableBodyCell>{folderPath(item.folder_id)}</TableBodyCell>
             <TableBodyCell>{item.description}</TableBodyCell>
-            <TableBodyCell></TableBodyCell>
             <TableBodyCell>
               <button
                 onclick={() => {
                   openModal = true;
                   modalHeading = "Edit Media";
                   currentForm = "manage-media";
+                  itemToEdit = item;
                 }}
                 class="font-medium text-primary-600 hover:underline dark:text-primary-500"
                 >Edit</button
@@ -106,6 +126,7 @@
             openModal = true;
             modalHeading = "Add Folder";
             currentForm = "manage-folder";
+            itemToEdit = undefined;
           }}
         >
           <PlusOutline size="sm" />Add Folder
@@ -125,14 +146,14 @@
     </TableHead>
     {#if folders}
       <TableBody tableBodyClass="divide-y">
-        {#each folders as item}
+        {#each folders.sort( (a, z) => a.folder_name.localeCompare(z.folder_name), ) as item (item)}
           <TableBodyRow>
             <TableBodyCell>{item.folder_name}</TableBodyCell>
             <TableBodyCell>{item.parent_folder_name}</TableBodyCell>
             <TableBodyCell>{item.media_type_name}</TableBodyCell>
             <TableBodyCell>
               {#if item.tag_names}
-                {#each item.tag_names.split(",") as tagName}
+                {#each item.tag_names.split(",") as tagName (tagName)}
                   <Badge class="mr-2" color="dark">{tagName}</Badge>
                 {/each}
               {/if}
@@ -141,6 +162,7 @@
               <button
                 onclick={() => {
                   openModal = true;
+                  itemToEdit = item;
                   modalHeading = "Edit Folder";
                   currentForm = "manage-folder";
                 }}
@@ -155,4 +177,4 @@
   </Table>
 </main>
 
-<Modal bind:open={openModal} {currentForm} {modalHeading}></Modal>
+<Modal bind:open={openModal} {itemToEdit} {currentForm} {modalHeading}></Modal>

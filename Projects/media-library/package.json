@@ -34,6 +34,6 @@
 		"@supabase/ssr": "^0.5.2",
 		"@supabase/supabase-js": "^2.49.1",
 		"svelte-file-dropzone": "^2.0.9",
-		"thumbhash": "^0.1.1"
+		"svelte-forms-lib": "^2.0.1"
 	}
 }
