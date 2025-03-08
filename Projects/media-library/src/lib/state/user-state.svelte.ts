@@ -202,6 +202,32 @@ export class UserState {
     return { status, error };
   }
 
+  async deleteMedia(mediaId: number) {
+    if (!this.supabase || !this.user) {
+      return;
+    }
+
+    const { status, error } = await this.supabase
+      .from("media")
+      .delete()
+      .eq("id", mediaId);
+
+    return { status, error };
+  }
+
+  async deleteFolder(folderId: number) {
+    if (!this.supabase || !this.user) {
+      return;
+    }
+
+    const { status, error } = await this.supabase
+      .from("folders")
+      .delete()
+      .eq("id", folderId);
+
+    return { status, error };
+  }
+
   async updateMedia(
     mediaId: number,
     updateObject: Partial<UpdatableMedia>,

@@ -6,10 +6,15 @@
     TableBodyRow,
     TableHead,
     TableHeadCell,
+    Tooltip,
   } from "flowbite-svelte";
 
   import { Button, Avatar, Heading, Toolbar, Badge } from "flowbite-svelte";
-  import { PlusOutline } from "flowbite-svelte-icons";
+  import {
+    PlusOutline,
+    EditOutline,
+    TrashBinOutline,
+  } from "flowbite-svelte-icons";
   import {
     getUserState,
     type Folder,
@@ -19,7 +24,9 @@
   let userContext = getUserState();
   let openModal = $state(false);
   let modalHeading = $state<string>("");
-  let currentForm = $state<"manage-media" | "manage-folder">("manage-media");
+  let currentForm = $state<
+    "manage-media" | "manage-folder" | "delete-confirmation"
+  >("manage-media");
   let itemToEdit = $state<Folder | Media>();
   let { media, folders, user } = $derived(userContext);
 
@@ -98,9 +105,23 @@
                   currentForm = "manage-media";
                   itemToEdit = item;
                 }}
-                class="font-medium text-primary-600 hover:underline dark:text-primary-500"
-                >Edit</button
+                class="font-medium mr-2 text-primary-600 hover:underline dark:text-primary-500"
+                ><EditOutline /></button
               >
+
+              <button
+                id={`delete_${item.id}`}
+                title="Delete"
+                onclick={() => {
+                  openModal = true;
+                  modalHeading = "Delete Media";
+                  currentForm = "delete-confirmation";
+                  itemToEdit = item;
+                }}
+                class="font-medium text-primary-600 hover:underline dark:text-primary-500"
+                ><TrashBinOutline /></button
+              >
+              <Tooltip triggeredBy={`delete_${item.id}`}>Delete</Tooltip>
             </TableBodyCell>
           </TableBodyRow>
         {/each}
@@ -166,8 +187,21 @@
                   modalHeading = "Edit Folder";
                   currentForm = "manage-folder";
                 }}
+                class="font-medium mr-2 text-primary-600 hover:underline dark:text-primary-500"
+                ><EditOutline /></button
+              >
+
+              <button
+                id={`delete_${item.id}`}
+                title="Delete"
+                onclick={() => {
+                  openModal = true;
+                  modalHeading = "Delete Folder";
+                  currentForm = "delete-confirmation";
+                  itemToEdit = item;
+                }}
                 class="font-medium text-primary-600 hover:underline dark:text-primary-500"
-                >Edit</button
+                ><TrashBinOutline /></button
               >
             </TableBodyCell>
           </TableBodyRow>
@@ -177,4 +211,5 @@
   </Table>
 </main>
 
-<Modal bind:open={openModal} {itemToEdit} {currentForm} {modalHeading}></Modal>
+<Modal bind:open={openModal} item={itemToEdit} {currentForm} {modalHeading}
+></Modal>

@@ -2,17 +2,18 @@
   import { ManageFolder, ManageMedia } from "$components";
   import type { Folder, Media } from "$lib/state/user-state.svelte";
   import { Modal } from "flowbite-svelte";
+  import DeleteConfirmation from "./DeleteConfirmation.svelte";
 
   let {
     open = $bindable(),
     modalHeading,
     currentForm,
-    itemToEdit,
+    item,
   }: {
     open: boolean;
     modalHeading: string;
-    currentForm: "manage-media" | "manage-folder";
-    itemToEdit: Folder | Media | undefined;
+    currentForm: "manage-media" | "manage-folder" | "delete-confirmation";
+    item: Folder | Media;
   } = $props();
 
   const closeModal = () => {
@@ -22,9 +23,12 @@
 
 <Modal bind:open title={modalHeading} size="md" class="m-4">
   {#if currentForm === "manage-media"}
-    <ManageMedia {itemToEdit} {closeModal} />
+    <ManageMedia itemToEdit={item} {closeModal} />
   {/if}
   {#if currentForm === "manage-folder"}
-    <ManageFolder {itemToEdit} {closeModal} />
+    <ManageFolder itemToEdit={item} {closeModal} />
+  {/if}
+  {#if currentForm === "delete-confirmation"}
+    <DeleteConfirmation {closeModal} itemToDelete={item} />
   {/if}
 </Modal>

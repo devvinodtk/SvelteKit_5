@@ -10,3 +10,4 @@ export { default as TagsComponent } from "./Common/TagsComponent.svelte";
 export { default as Modal } from "./Layout/Modal.svelte";
 export { default as Header } from "./Layout/Header.svelte";
 export { default as AuthForm } from "./Layout/AuthForm.svelte";
+export { default as DeleteConfirmation } from "./Layout/DeleteConfirmation.svelte";
