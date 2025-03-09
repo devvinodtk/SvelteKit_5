@@ -62,6 +62,6 @@ export const actions = {
       .from("user_names")
       .insert({ user_id: userId, name });
 
-    redirect(303, "/private/dashboard");
+    redirect(303, "/private/reports");
   },
 } satisfies Actions;

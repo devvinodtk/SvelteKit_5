@@ -32,20 +32,6 @@
 
   const folderPath = (parentFolderId: number) =>
     folders?.find((folder) => folder.id == parentFolderId)?.folder_path;
-
-  const getMediaUrl = (parentFolderId: number, mediaFileName: string) => {
-    const fileFolderPath = folderPath(parentFolderId);
-    if (fileFolderPath) {
-      const response = userContext.getMediaPublicUrl(
-        `${user?.id}/${fileFolderPath}/${mediaFileName}`,
-      );
-      if (response?.data.publicUrl) {
-        console.log(decodeURI(response?.data.publicUrl));
-        return response?.data.publicUrl;
-      }
-    }
-    return "";
-  };
 </script>
 
 <main class="relative h-full w-full overflow-y-aut dark:bg-gray-800 p-4">
