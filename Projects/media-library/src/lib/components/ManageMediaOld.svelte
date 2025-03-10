@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getUserState } from "$lib/state/user-state.svelte";
-  import { generateImageThumbnail } from "$lib/utils/CustomUtility";
+  import { generateImageThumbnail } from "$lib/utils/utility-functions";
   let userContext = getUserState();
   const { tags, mediaTypes, folders } = $derived(userContext);
   import DropZone from "svelte-file-dropzone";

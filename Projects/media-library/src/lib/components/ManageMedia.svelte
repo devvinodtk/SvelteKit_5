@@ -13,7 +13,7 @@
     Textarea,
   } from "flowbite-svelte";
   import { createForm } from "svelte-forms-lib";
-  import { generateImageThumbnail } from "$lib/utils/CustomUtility";
+  import { generateImageThumbnail } from "$lib/utils/utility-functions";
   import DropZone from "svelte-file-dropzone";
 
   let userContext = getUserState();

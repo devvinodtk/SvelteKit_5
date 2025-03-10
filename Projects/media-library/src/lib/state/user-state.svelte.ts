@@ -1,5 +1,5 @@
 import { goto } from "$app/navigation";
-import { generateFolderPaths } from "$lib/utils/CustomUtility";
+import { generateFolderPaths } from "$lib/utils/utility-functions";
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { setContext, getContext } from "svelte";
 
