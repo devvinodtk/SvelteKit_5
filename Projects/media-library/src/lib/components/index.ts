@@ -6,7 +6,6 @@ export { default as Navbar } from "./Navbar.svelte";
 export { default as Sidebar } from "./Sidebar.svelte";
 
 export { default as Button } from "./Common/Button.svelte";
-export { default as ManageFolderOld } from "./Common/ManageFolder.svelte";
 export { default as TagsComponent } from "./Common/TagsComponent.svelte";
 
 export { default as Modal } from "./Layout/Modal.svelte";

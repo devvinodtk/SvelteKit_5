@@ -41,6 +41,10 @@
   let sortColumn = $state<string>("folderName");
   let sortDirection = $state<"asc" | "desc">("asc");
 
+  // Track the last values to decide when to reset
+  let lastSearchTerm = $state<string>("");
+  let lastFilterColumn = $state<string>("all");
+
   // Pagination states
   let currentPage = $state<number>(1);
   let pageSize = $state<number>(10);
@@ -62,6 +66,13 @@
             return value && value.toLowerCase().includes(term);
           });
       }
+
+      // Filter by specific column
+      const column = folderTableColumns.find((col) => col.id === filterColumn);
+      if (!column) return true; // If column not found, don't filter
+
+      const value = column.accessor(item);
+      return value && value.toLowerCase().includes(term);
     });
   };
 
@@ -140,12 +151,30 @@
     filterColumn = "all";
   }
 
-  $effect: {
-    if (searchTerm || filterColumn)
-      if (currentPage !== 1) {
-        currentPage = 1;
-      }
+  function updateSearchTerm(event: Event) {
+    const input = event.target as HTMLInputElement;
+    searchTerm = input.value;
+    if (currentPage !== 1) {
+      currentPage = 1;
+    }
   }
+
+  function updateFilterColumn(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    filterColumn = select.value;
+    if (currentPage !== 1) {
+      currentPage = 1;
+    }
+  }
+
+  $effect(() => {
+    // Only reset pagination when these values actually change
+    if (searchTerm !== lastSearchTerm || filterColumn !== lastFilterColumn) {
+      currentPage = 1;
+      lastSearchTerm = searchTerm;
+      lastFilterColumn = filterColumn;
+    }
+  });
 </script>
 
 <main class="relative h-full w-full overflow-y-aut dark:bg-gray-800 p-4">
@@ -160,11 +189,15 @@
       <div class="flex items-center">
         <Input
           type="text"
-          bind:value={searchTerm}
-          placeholder="Search for media"
+          on:input={updateSearchTerm}
+          placeholder="Search for folders"
           class="me-2 w-64 border xl:w-80"
         />
-        <Select class="w-40 me-2" bind:value={filterColumn}>
+        <Select
+          class="w-40 me-2"
+          on:change={updateFilterColumn}
+          bind:value={filterColumn}
+        >
           <option value="all">All Columns</option>
           {#each filterOptions as option}
             <option value={option.value}>{option.label}</option>
@@ -189,6 +222,36 @@
         </Button>
       </div>
     </Toolbar>
+
+    <div class="mb-4 flex flex-wrap items-center justify-between">
+      <div class="text-sm text-gray-600 dark:text-gray-400">
+        {#if searchTerm.trim()}
+          Showing {filteredAndSortedFolders.length} of {folders?.length || 0} items
+          {#if filterColumn !== "all"}
+            | Filtering by: {folderTableColumns.find(
+              (col) => col.id === filterColumn,
+            )?.label || filterColumn}
+          {/if}
+        {/if}
+      </div>
+
+      <div class="flex items-center space-x-2 mt-2 sm:mt-0">
+        <span class="text-sm text-gray-600 dark:text-gray-400"
+          >Items per page:</span
+        >
+        <Select
+          class="w-16"
+          bind:value={pageSize}
+          on:change={handlePageSizeChange}
+          size="sm"
+        >
+          {#each pageSizeOptions as option}
+            <option value={option}>{option}</option>
+          {/each}
+        </Select>
+      </div>
+    </div>
+
     <Table shadow hoverable={true}>
       <TableHead>
         {#each folderTableColumns as column}

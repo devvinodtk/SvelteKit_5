@@ -79,6 +79,10 @@
   let sortColumn = $state<string>("name");
   let sortDirection = $state<"asc" | "desc">("asc");
 
+  // Track the last values to decide when to reset
+  let lastSearchTerm = $state<string>("");
+  let lastFilterColumn = $state<string>("all");
+
   // Pagination states
   let currentPage = $state<number>(1);
   let pageSize = $state<number>(10);
@@ -187,12 +191,30 @@
     filterColumn = "all";
   }
 
-  $effect: {
-    if (searchTerm || filterColumn)
-      if (currentPage !== 1) {
-        currentPage = 1;
-      }
+  function updateSearchTerm(event: Event) {
+    const input = event.target as HTMLInputElement;
+    searchTerm = input.value;
+    if (currentPage !== 1) {
+      currentPage = 1;
+    }
   }
+
+  function updateFilterColumn(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    filterColumn = select.value;
+    if (currentPage !== 1) {
+      currentPage = 1;
+    }
+  }
+
+  $effect(() => {
+    // Only reset pagination when these values actually change
+    if (searchTerm !== lastSearchTerm || filterColumn !== lastFilterColumn) {
+      currentPage = 1;
+      lastSearchTerm = searchTerm;
+      lastFilterColumn = filterColumn;
+    }
+  });
 </script>
 
 <main class="relative h-full w-full overflow-y-auto dark:bg-gray-800 p-4">
@@ -213,12 +235,16 @@
         >
           <Input
             type="text"
-            bind:value={searchTerm}
+            on:input={updateSearchTerm}
             placeholder="Search for media"
             class="me-2 w-64 border xl:w-80"
           />
           <div class="flex flex-row gap-2 w-full sm:w-auto">
-            <Select class="w-40 me-2" bind:value={filterColumn}>
+            <Select
+              class="w-40 me-2"
+              on:change={updateFilterColumn}
+              bind:value={filterColumn}
+            >
               <option value="all">All Columns</option>
               {#each filterOptions as option}
                 <option value={option.value}>{option.label}</option>

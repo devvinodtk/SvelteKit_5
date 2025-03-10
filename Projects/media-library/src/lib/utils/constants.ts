@@ -48,7 +48,7 @@ export const folderTableColumns = [
   },
   {
     id: "parentFolder",
-    label: "Name",
+    label: "Parent Folder Name",
     accessor: (item: Folder) => item.parent_folder_name,
     sortable: true,
   },

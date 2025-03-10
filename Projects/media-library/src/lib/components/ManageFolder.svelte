@@ -216,11 +216,3 @@
   </div>
   <Button type="submit">{isEditMode ? "Update" : "Save"} Media</Button>
 </form>
-
-<style>
-  .select-error {
-    @apply text-red-900;
-    @apply border-red-500;
-    @apply bg-red-50;
-  }
-</style>
