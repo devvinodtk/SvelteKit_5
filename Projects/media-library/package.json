@@ -33,6 +33,7 @@
 	"dependencies": {
 		"@supabase/ssr": "^0.5.2",
 		"@supabase/supabase-js": "^2.49.1",
+		"amplify-adapter": "^0.2.0",
 		"pdfjs-dist": "^4.10.38",
 		"svelte-file-dropzone": "^2.0.9",
 		"svelte-forms-lib": "^2.0.1"
