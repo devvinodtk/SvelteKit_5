@@ -71,3 +71,39 @@ export const folderTableColumns = [
     sortable: false,
   },
 ];
+
+export const allowedFileTypes = {
+  image: {
+    mimeTypes: [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "image/svg+xml",
+    ],
+    extensions: "JPG, PNG, GIF, WEBP, SVG",
+    displayName: "Images",
+  },
+  video: {
+    mimeTypes: ["video/mp4", "video/webm", "video/ogg"],
+    extensions: "MP4, WEBM, OGV",
+    displayName: "Videos",
+  },
+  audio: {
+    mimeTypes: ["audio/mpeg", "audio/ogg", "audio/wav", "audio/webm"],
+    extensions: "MP3, OGG, WAV, WEBM",
+    displayName: "Audio files",
+  },
+  documents: {
+    mimeTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
+    extensions: "PDF, DOC, DOCX, TXT, XLS, XLSX",
+    displayName: "Documents",
+  },
+};

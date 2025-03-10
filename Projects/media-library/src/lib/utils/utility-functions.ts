@@ -1,4 +1,8 @@
 import type { Folder } from "$lib/state/user-state.svelte";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+
+// Set the worker source path
+GlobalWorkerOptions.workerSrc = "/src/assets/pdf.worker.min.mjs";
 
 export function generateFolderPaths(folders: Folder[]) {
   const folderMap = new Map();
@@ -95,3 +99,141 @@ export async function generateImageThumbnail(file: File): Promise<File | null> {
     reader.readAsDataURL(file);
   });
 }
+
+export const generateVideoThumbnail = async (
+  file: File,
+): Promise<File | null> => {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.src = url;
+    video.currentTime = 5; // Capture frame at 5 seconds
+
+    video.onloadeddata = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Failed to get canvas context"));
+        return;
+      }
+      canvas.width = video.videoWidth / 2;
+      canvas.height = video.videoHeight / 2;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create image blob"));
+          return;
+        }
+
+        // Create a new file with timestamp to ensure uniqueness
+        const thumbnail = new File(
+          [blob],
+          `${new Date().getTime()}_thumbnail.png`,
+          { type: "image/png" },
+        );
+
+        resolve(thumbnail);
+      }, "image/png");
+    };
+  });
+};
+
+export async function generatePDFThumbnails(file: File): Promise<File | null> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      if (!e.target?.result) {
+        reject(new Error("Failed to read file"));
+        return;
+      }
+
+      if (e.target.result instanceof ArrayBuffer) {
+        try {
+          const pdf = await getDocument({
+            data: new Uint8Array(e.target.result),
+          }).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 0.5 });
+
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          if (!ctx) {
+            reject(new Error("Failed to get canvas context"));
+            return;
+          }
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          // Convert canvas to blob instead of DataURL
+          canvas.toBlob((blob) => {
+            if (blob) {
+              // Create a new File from the blob
+              const thumbnailFile = new File(
+                [blob],
+                `${file.name.split(".")[0]}_thumbnail.png`,
+                { type: "image/png" },
+              );
+              resolve(thumbnailFile);
+            } else {
+              reject(new Error("Failed to convert canvas to blob"));
+            }
+          }, "image/png");
+        } catch (error) {
+          reject(error);
+        }
+      } else {
+        reject(new Error("Invalid file type: expected an ArrayBuffer"));
+        return;
+      }
+    };
+
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Create a placeholder thumbnail based on file type
+export const generatePlaceholderThumbnail = async (
+  fileType: string,
+): Promise<File> => {
+  // This is a simplified example - in a real implementation you might want to
+  // use actual icons for different file types or generate thumbnails for videos, etc.
+  const canvas = document.createElement("canvas");
+  canvas.width = 200;
+  canvas.height = 200;
+  const ctx = canvas.getContext("2d");
+
+  if (ctx) {
+    ctx.fillStyle = "#f0f0f0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#666666";
+    ctx.font = "24px Arial";
+
+    let fileTypeName = "File";
+    if (fileType.startsWith("video/")) fileTypeName = "Video";
+    else if (fileType.startsWith("audio/")) fileTypeName = "Audio";
+    else if (
+      fileType.startsWith("application/") ||
+      fileType.startsWith("text/")
+    )
+      fileTypeName = "Document";
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(fileTypeName, canvas.width / 2, canvas.height / 2);
+  }
+
+  return new Promise<File>((resolve) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], "thumbnail.png", { type: "image/png" });
+        resolve(file);
+      }
+    }, "image/png");
+  });
+};

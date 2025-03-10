@@ -42,7 +42,6 @@
       );
     }
   }
-  $inspect(thumbnail);
 </script>
 
 <section class="default-margin">

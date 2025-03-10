@@ -26,7 +26,7 @@
   } from "flowbite-svelte-icons";
   import { getUserState } from "$lib/state/user-state.svelte";
   let userContext = getUserState();
-  let { media, folders, user } = $derived(userContext);
+  let { media, folders } = $derived(userContext);
   let openModal = $state(false);
   let itemToEdit = $state<Media>();
   let currentForm = $state<"manage-media" | "delete-confirmation">(
@@ -56,7 +56,7 @@
     {
       id: "folderPath",
       label: "Folder Path",
-      accessor: (item: Media) => folderPath(item.folder_id) || "",
+      accessor: (item: Media) => getFolderPath(item.folder_id) || "",
       sortable: true,
     },
     {
@@ -84,8 +84,11 @@
   let pageSize = $state<number>(10);
   let pageSizeOptions = [5, 10, 25, 50, 100];
 
-  const folderPath = (parentFolderId: number) =>
+  const getFolderPath = (parentFolderId: number) =>
     folders?.find((folder) => folder.id == parentFolderId)?.folder_path;
+
+  const getMediaType = (parentFolderId: number) =>
+    folders?.find((folder) => folder.id == parentFolderId)?.media_type_name;
 
   function getFilteredMedia() {
     if (!media) return [];
@@ -200,25 +203,34 @@
     >
       All Media
     </Heading>
-    <Toolbar embedded class="w-full py-4 text-gray-500 dark:text-gray-400">
-      <div class="flex items-center">
-        <Input
-          type="text"
-          bind:value={searchTerm}
-          placeholder="Search for media"
-          class="me-2 w-64 border xl:w-80"
-        />
-        <Select class="w-40 me-2" bind:value={filterColumn}>
-          <option value="all">All Columns</option>
-          {#each filterOptions as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </Select>
-        <Button size="sm" color="light" on:click={resetFilters}>
-          Clear Filters
-        </Button>
+    <Toolbar
+      embedded
+      class="w-full toolbar py-4 text-gray-500 dark:text-gray-400"
+    >
+      <div class="flex flex-col sm:flex-row w-full gap-2 justify-between">
+        <div
+          class="flex flex-col sm:flex-row items-start sm:items-center gap-2"
+        >
+          <Input
+            type="text"
+            bind:value={searchTerm}
+            placeholder="Search for media"
+            class="me-2 w-64 border xl:w-80"
+          />
+          <div class="flex flex-row gap-2 w-full sm:w-auto">
+            <Select class="w-40 me-2" bind:value={filterColumn}>
+              <option value="all">All Columns</option>
+              {#each filterOptions as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </Select>
+            <Button size="sm" color="light" on:click={resetFilters}>
+              Clear Filters
+            </Button>
+          </div>
+        </div>
       </div>
-      <div slot="end" class="flex items-center space-x-2">
+      <div slot="end" class="flex">
         <Button
           size="sm"
           class="gap-2 whitespace-nowrap px-3"
@@ -253,7 +265,7 @@
         >
         <Select
           class="w-16"
-          value={pageSize.toString()}
+          bind:value={pageSize}
           on:change={handlePageSizeChange}
           size="sm"
         >
@@ -297,8 +309,8 @@
                 {/if}
               </TableBodyCell>
               <TableBodyCell>{item.display_name}</TableBodyCell>
-              <TableBodyCell>Image</TableBodyCell>
-              <TableBodyCell>{folderPath(item.folder_id)}</TableBodyCell>
+              <TableBodyCell>{getMediaType(item.folder_id)}</TableBodyCell>
+              <TableBodyCell>{getFolderPath(item.folder_id)}</TableBodyCell>
               <TableBodyCell>{item.description}</TableBodyCell>
               <TableBodyCell>
                 <button
@@ -364,7 +376,6 @@
           {pages}
           on:next={() => (currentPage = Math.min(currentPage + 1, totalPages))}
           on:previous={() => (currentPage = Math.max(currentPage - 1, 1))}
-          icon
         >
           <svelte:fragment slot="prev">
             <span class="sr-only">Previous</span>

@@ -25,7 +25,7 @@
   } from "flowbite-svelte-icons";
 
   import { getUserState } from "$lib/state/user-state.svelte";
-  import { folderTableColumns } from "$lib/utils/table-columns";
+  import { folderTableColumns } from "$lib/utils/constants";
   let userContext = getUserState();
   let { folders } = $derived(userContext);
   let openModal = $state(false);

@@ -132,7 +132,6 @@
       inputValue = "";
     }
   };
-  $inspect($form.tagNames);
 </script>
 
 <form onsubmit={handleSubmit}>
