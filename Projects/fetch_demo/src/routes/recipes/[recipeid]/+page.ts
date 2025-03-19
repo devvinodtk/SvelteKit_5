@@ -5,7 +5,6 @@ export const load: PageLoad = async ({ params }) => {
     `https://dummyjson.com/recipes/${params.recipeid}`
   );
   const recipe = await response.json();
-  console.log(recipe);
   return {
     name: recipe.name,
     ingredients: recipe.ingredients,
